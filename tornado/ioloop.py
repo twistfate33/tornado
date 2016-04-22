@@ -67,7 +67,7 @@ _POLL_TIMEOUT = 3600.0
 class TimeoutError(Exception):
     pass
 
-
+# tornado 最底层的类IOLoop,子类需要实现必要的模板方法
 class IOLoop(Configurable):
     """A level-triggered I/O loop.
 
@@ -232,6 +232,9 @@ class IOLoop(Configurable):
     def configurable_base(cls):
         return IOLoop
 
+    # 根据系统动态选择底层的IO多路复用模型
+    # 类似于libevent,优先选择epoll,最差情况
+    # 只能使用select模型
     @classmethod
     def configurable_default(cls):
         if hasattr(select, "epoll"):
@@ -752,7 +755,7 @@ class PollIOLoop(IOLoop):
             return
         old_current = getattr(IOLoop._current, "instance", None)
         IOLoop._current.instance = self
-        self._thread_ident = thread.get_ident()
+        self._thread_ident = thread.get_ident() # 保存当前线程ID
         self._running = True
 
         # signal.set_wakeup_fd closes a race condition in event loops:
@@ -792,6 +795,7 @@ class PollIOLoop(IOLoop):
             while True:
                 # Prevent IO event starvation by delaying new callbacks
                 # to the next iteration of the event loop.
+                # self._callbacks为立即事件,每次循环就会马上回调
                 with self._callback_lock:
                     callbacks = self._callbacks
                     self._callbacks = []
@@ -801,19 +805,31 @@ class PollIOLoop(IOLoop):
                 # are ready, so timeouts that call add_timeout cannot
                 # schedule anything in this iteration.
                 due_timeouts = []
+                # self._timeouts为二叉堆,用于管理定时器
                 if self._timeouts:
                     now = self.time()
                     while self._timeouts:
+
                         if self._timeouts[0].callback is None:
+                            # 定时器的回调函数有可能为None的情况,因为用户删除定时器,内部并不会
+                            # 立即从二叉堆中删除,而是直接将其回调标记为None,因为
+                            # 从二叉堆中删除会造成不必要的开销
+                            # 国内科学软件Shadowsocks源码tcprelay.py中的class TCPRelay借鉴了此方法
+                            # 在_sweep_timeout方法中可以找到,只是在此基础上修改，使用sorted list进行存储
+                            # 通过map存储每个callback在sorted list的下标
                             # The timeout was cancelled.  Note that the
                             # cancellation check is repeated below for timeouts
                             # that are cancelled by another timeout or callback.
                             heapq.heappop(self._timeouts)
                             self._cancellations -= 1
                         elif self._timeouts[0].deadline <= now:
+                            # 已经超时的定时器暂时放到due_timeouts当中
                             due_timeouts.append(heapq.heappop(self._timeouts))
                         else:
                             break
+
+                    # 加入二叉堆中已被删除的定时器数目超过512或者大于二叉堆总数的一般
+                    # 那么重新整理二叉堆,将删除的定时器从二叉堆移除,然后重新构建二叉堆
                     if (self._cancellations > 512 and
                             self._cancellations > (len(self._timeouts) >> 1)):
                         # Clean up the timeout queue when it gets large and it's
@@ -832,6 +848,10 @@ class PollIOLoop(IOLoop):
                 # them to be freed before we go into our poll wait.
                 callbacks = callback = due_timeouts = timeout = None
 
+                # 这里获取下次循环超时的时间
+                # 1. 有立即回调的函数即self._callbacks非空,poll_timeout为0
+                # 2. 如果有定时器存在,从二叉堆顶获取最短出发的定时器的超时时间
+                # 3. ioloop中没有任何事件,默认使用_POLL_TIMEOUT
                 if self._callbacks:
                     # If any callbacks or timeouts called add_callback,
                     # we don't want to wait in poll() before we run them.
@@ -855,6 +875,8 @@ class PollIOLoop(IOLoop):
                     signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
                 try:
+                    # self._impl从外部传递进来,底层操作系统IO多路复用API
+                    # 返回发生的事件列表以及对应的事件类型
                     event_pairs = self._impl.poll(poll_timeout)
                 except Exception as e:
                     # Depending on python version and IOLoop implementation,
@@ -880,6 +902,7 @@ class PollIOLoop(IOLoop):
                     fd, events = self._events.popitem()
                     try:
                         fd_obj, handler_func = self._handlers[fd]
+                        # 这里调用与文件描述符对应的回调函数
                         handler_func(fd_obj, events)
                     except (OSError, IOError) as e:
                         if errno_from_exception(e) == errno.EPIPE:
@@ -922,6 +945,7 @@ class PollIOLoop(IOLoop):
         # http://docs.python.org/library/heapq.html).
         # If this turns out to be a problem, we could add a garbage
         # collection pass whenever there are too many dead timeouts.
+        # 直接赋值为None，而不是从二叉堆中删除
         timeout.callback = None
         self._cancellations += 1
 

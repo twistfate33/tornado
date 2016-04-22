@@ -34,6 +34,9 @@ except ImportError:
     # ssl is not available on Google App Engine.
     ssl = None
 
+# 除去SSL，其他都比较简单，容易理解
+# `TCPServer`属于抽象类，子类需要实现`handle_stream`支持监听多个地址，支持IPV4和IPV6，支持
+# 多进程，在调用start(self, num_processes=1)时候指定
 
 class TCPServer(object):
     r"""A non-blocking, single-threaded TCP server.
@@ -137,7 +140,8 @@ class TCPServer(object):
         """
         if self.io_loop is None:
             self.io_loop = IOLoop.current()
-
+        # 将socket放到ioloop中进行回调,有连接到来回调
+        # `_handle_connection(self, connection, address)`
         for sock in sockets:
             self._sockets[sock.fileno()] = sock
             add_accept_handler(sock, self._handle_connection,
@@ -257,6 +261,9 @@ class TCPServer(object):
                     return connection.close()
                 else:
                     raise
+        # IOStream 和 SSLIOStream是比较大的类，在iostream.py文件中定义,
+        # 包装每个socket连接(这可能不是很准确，因为IO事件不一定是socket，当时
+        # 就暂时把整个框架当成网络IO来理解框架代码)
         try:
             if self.ssl_options is not None:
                 stream = SSLIOStream(connection, io_loop=self.io_loop,
