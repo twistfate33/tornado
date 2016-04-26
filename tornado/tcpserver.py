@@ -38,7 +38,7 @@ except ImportError:
 # `TCPServer`属于抽象类，子类需要实现`handle_stream`支持监听多个地址，支持IPV4和IPV6，支持
 # 多进程，在调用start(self, num_processes=1)时候指定
 
-class TCPServer(object):
+class TCPSerwver(object):
     r"""A non-blocking, single-threaded TCP server.
 
     To use `TCPServer`, define a subclass which overrides the `handle_stream`

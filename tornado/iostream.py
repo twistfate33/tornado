@@ -684,7 +684,8 @@ class BaseIOStream(object):
             # If we scheduled a callback, we will add the error listener
             # afterwards.  If we didn't, we have to do it now.
             self._maybe_add_error_listener()
-
+    # 调用`self._read_from_buffer(pos)`尝试从缓冲区获取数据，如果有就不放到ioloop中调度
+    # 否则调用_read_to_buffer_loop进行调度
     def _try_inline_read(self):
         """Attempt to complete the current read operation from buffered data.
 
@@ -696,11 +697,12 @@ class BaseIOStream(object):
         self._run_streaming_callback()
         pos = self._find_read_pos()
         if pos is not None:
-            self._read_from_buffer(pos)
+            self._read_from_buffer(pos) # 先直接从缓冲区取数据
             return
         self._check_closed()
         try:
-            pos = self._read_to_buffer_loop()
+            pos = self._read_to_buffer_loop() # 放到ioloop中调度，如果有数据，再调用_read_from_buffer
+                                              # 否则，就将一个READ事件放到ioloop中
         except Exception:
             # If there was an in _read_to_buffer, we called close() already,
             # but couldn't run the close callback because of _pending_callbacks.

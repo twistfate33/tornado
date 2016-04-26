@@ -81,6 +81,7 @@ class StackContextInconsistentError(Exception):
 
 class _State(threading.local):
     def __init__(self):
+        # t[0]栈序列 t[1]栈顶
         self.contexts = (tuple(), None)
 _state = _State()
 
@@ -117,18 +118,19 @@ class StackContext(object):
     def enter(self):
         context = self.context_factory()
         self.contexts.append(context)
-        context.__enter__()
+        context.__enter__() # 告知context入栈
 
     def exit(self, type, value, traceback):
-        context = self.contexts.pop()
+        context = self.contexts.pop() # 告知context出栈
         context.__exit__(type, value, traceback)
 
     # Note that some of this code is duplicated in ExceptionStackContext
     # below.  ExceptionStackContext is more common and doesn't need
     # the full generality of this class.
     def __enter__(self):
+        # 入栈
         self.old_contexts = _state.contexts
-        self.new_contexts = (self.old_contexts[0] + (self,), self)
+        self.new_contexts = (self.old_contexts[0] + (self,), self)  # 栈序列加1，栈顶更新为当前的stackcontext
         _state.contexts = self.new_contexts
 
         try:
@@ -143,6 +145,7 @@ class StackContext(object):
         try:
             self.exit(type, value, traceback)
         finally:
+            # 出栈
             final_contexts = _state.contexts
             _state.contexts = self.old_contexts
 
@@ -234,7 +237,7 @@ def _remove_deactivated(contexts):
     while head is not None and not head.active:
         head = head.old_contexts[1]
 
-    # Process chain
+    # Process chain 清空unactive的context
     ctx = head
     while ctx is not None:
         parent = ctx.old_contexts[1]
@@ -242,6 +245,7 @@ def _remove_deactivated(contexts):
         while parent is not None:
             if parent.active:
                 break
+            # 指针连接到前一个节点
             ctx.old_contexts = parent.old_contexts
             parent = parent.old_contexts[1]
 
@@ -270,10 +274,13 @@ def wrap(fn):
         # Fast path when there are no active contexts.
         def null_wrapper(*args, **kwargs):
             try:
+                #1 先压栈
                 current_state = _state.contexts
                 _state.contexts = cap_contexts[0]
+                #2 调用fn
                 return fn(*args, **kwargs)
             finally:
+                #3 最后出栈
                 _state.contexts = current_state
         null_wrapper._wrapped = True
         return null_wrapper
