@@ -130,7 +130,7 @@ class StackContext(object):
     def __enter__(self):
         # 入栈
         self.old_contexts = _state.contexts
-        self.new_contexts = (self.old_contexts[0] + (self,), self)  # 栈序列加1，栈顶更新为当前的stackcontext
+        self.new_contexts = (self.old_contexts[0] + (self,), self)  # 栈序列加1，栈顶更新为当前的stackcontext, 注意这里是元祖，是重新赋值，
         _state.contexts = self.new_contexts
 
         try:
@@ -253,6 +253,7 @@ def _remove_deactivated(contexts):
 
     return (stack_contexts, head)
 
+# 这里wrap封装函数fn，用于在fn被回调的时候，将栈上下文恢复为wrap被调用的时候
 
 def wrap(fn):
     """Returns a callable object that will restore the current `StackContext`
@@ -268,7 +269,9 @@ def wrap(fn):
 
     # Capture current stack head
     # TODO: Any other better way to store contexts and update them in wrapped function?
-    cap_contexts = [_state.contexts]
+    #　这里是关键点
+    cap_contexts = [_state.contexts] # 将当前的栈保留，当wrapped被调用的时候，cap_contexts[0]的内容可能与_state.contexts不相等
+
 
     if not cap_contexts[0][0] and not cap_contexts[0][1]:
         # Fast path when there are no active contexts.
@@ -305,7 +308,7 @@ def wrap(fn):
             last_ctx = 0
             stack = contexts[0]
 
-            # Apply state
+            # Apply state 对每个栈序列进行调用，恢复到在add_callback时候的状态
             for n in stack:
                 try:
                     n.enter()
@@ -313,7 +316,7 @@ def wrap(fn):
                 except:
                     # Exception happened. Record exception info and store top-most handler
                     exc = sys.exc_info()
-                    top = n.old_contexts[1]
+                    top = n.old_contexts[1] # 调用栈的上一帧异常处理
 
             # Execute callback if no exception happened while restoring state
             if top is None:
@@ -321,7 +324,7 @@ def wrap(fn):
                     ret = fn(*args, **kwargs)
                 except:
                     exc = sys.exc_info()
-                    top = contexts[1]
+                    top = contexts[1] # 回调有异常，调用与自己栈相关的上下文异常处理，或者一直沿着栈往上传递这个异常
 
             # If there was exception, try to handle it by going through the exception chain
             if top is not None:
@@ -357,6 +360,7 @@ def wrap(fn):
 
 
 def _handle_exception(tail, exc):
+    # 从栈顶一直往栈底递送这个异常,知道有一个栈捕获这个异常位置
     while tail is not None:
         try:
             if tail.exit(*exc):

@@ -582,8 +582,12 @@ class BaseIOStream(object):
             self._pending_callbacks += 1
             self.io_loop.add_callback(wrapper)
 
+    # 一直从sockfd中读数据并写入到缓冲区中，直到无法从sockfd中读取到数据或者满足对应的读需求
+    # 1. 如果是流式，那么每次读到数据就回调通知，将缓冲区的数据消耗掉
+    # 2. 如果是非流式，读数据直到缓冲区长度达到要求位置，这里为了防止调用_find_read_pos做了优化
     def _read_to_buffer_loop(self):
         # This method is called from _handle_read and _try_inline_read.
+        # 对于流式IOStream，target_bytes是没有意义的，因为一旦缓冲区有数据就会进行回调，将数据消耗掉
         try:
             if self._read_bytes is not None:
                 target_bytes = self._read_bytes
@@ -608,6 +612,7 @@ class BaseIOStream(object):
             # clause below (which calls `close` and does need to
             # trigger the callback)
             self._pending_callbacks += 1
+            # 一直读，直到满足要求为止
             while not self.closed():
                 # Read from the socket until we get EWOULDBLOCK or equivalent.
                 # SSL sockets do some internal buffering, and if the data is
@@ -617,7 +622,7 @@ class BaseIOStream(object):
                 if self._read_to_buffer() == 0:
                     break
 
-                self._run_streaming_callback()
+                self._run_streaming_callback() # 流式callback，有数据就一直消耗，如果将iostream设置为流式，性能会提升
 
                 # If we've read all the bytes we can use, break out of
                 # this loop.  We can't just call read_from_buffer here
@@ -633,11 +638,13 @@ class BaseIOStream(object):
                 # It's inefficient to do this on every read, so instead
                 # do it on the first read and whenever the read buffer
                 # size has doubled.
+                # 一直从sockfd中获取缓冲区数据，直到缓冲区的数据达到我们的要求位置
                 if self._read_buffer_size >= next_find_pos:
-                    pos = self._find_read_pos()
+                    # 大于才有可能满足需求
+                    pos = self._find_read_pos() # 从现有的缓冲区数据中找一下满足需求的pos
                     if pos is not None:
                         return pos
-                    next_find_pos = self._read_buffer_size * 2
+                    next_find_pos = self._read_buffer_size * 2  # 没有找到，继续从sockfd获取数据，指数增长
             return self._find_read_pos()
         finally:
             self._pending_callbacks -= 1
@@ -665,7 +672,7 @@ class BaseIOStream(object):
         else:
             self._read_future = TracebackFuture()
         return self._read_future
-
+    # 从缓冲区处理 =size= 字节数据并调用callback进行通知
     def _run_read_callback(self, size, streaming):
         if streaming:
             callback = self._streaming_callback
@@ -684,8 +691,7 @@ class BaseIOStream(object):
             # If we scheduled a callback, we will add the error listener
             # afterwards.  If we didn't, we have to do it now.
             self._maybe_add_error_listener()
-    # 调用`self._read_from_buffer(pos)`尝试从缓冲区获取数据，如果有就不放到ioloop中调度
-    # 否则调用_read_to_buffer_loop进行调度
+
     def _try_inline_read(self):
         """Attempt to complete the current read operation from buffered data.
 
@@ -695,14 +701,14 @@ class BaseIOStream(object):
         """
         # See if we've already got the data from a previous read
         self._run_streaming_callback()
+        # 先尝试从缓冲区中获取数据，确认下是否满足需求
         pos = self._find_read_pos()
         if pos is not None:
-            self._read_from_buffer(pos) # 先直接从缓冲区取数据
+            self._read_from_buffer(pos)
             return
         self._check_closed()
         try:
-            pos = self._read_to_buffer_loop() # 放到ioloop中调度，如果有数据，再调用_read_from_buffer
-                                              # 否则，就将一个READ事件放到ioloop中
+            pos = self._read_to_buffer_loop() # 一直从sockfd中读数据,直到满足要求
         except Exception:
             # If there was an in _read_to_buffer, we called close() already,
             # but couldn't run the close callback because of _pending_callbacks.
@@ -710,6 +716,7 @@ class BaseIOStream(object):
             # applicable.
             self._maybe_run_close_callback()
             raise
+        # 满足要求就不添加到ioloop
         if pos is not None:
             self._read_from_buffer(pos)
             return
@@ -753,6 +760,7 @@ class BaseIOStream(object):
             raise StreamBufferFullError("Reached maximum read buffer size")
         return len(chunk)
 
+    # 会调用回调函数处理数据
     def _run_streaming_callback(self):
         if self._streaming_callback is not None and self._read_buffer_size:
             bytes_to_consume = self._read_buffer_size
@@ -771,6 +779,7 @@ class BaseIOStream(object):
         self._read_partial = False
         self._run_read_callback(pos, False)
 
+    # 尝试在缓冲区中找一个满足读请求的位置
     def _find_read_pos(self):
         """Attempts to find a position in the read buffer that satisfies
         the currently-pending read.

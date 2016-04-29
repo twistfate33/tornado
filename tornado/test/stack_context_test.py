@@ -83,6 +83,7 @@ class StackContextTest(AsyncTestCase):
         def library_inner_callback(callback):
             self.assertEqual(self.active_contexts[-2:],
                              ['application', 'library'])
+            
             callback()
 
         def final_callback():
