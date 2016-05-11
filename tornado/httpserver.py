@@ -179,7 +179,7 @@ class HTTPServer(TCPServer, Configurable,
         conn.start_serving(self)
 
     def start_request(self, server_conn, request_conn):
-        return _ServerRequestAdapter(self, server_conn, request_conn)
+        return _ServerRequestAdapter(self, server_conn, request_conn) # HTTPMessageDelegate
 
     def on_close(self, server_conn):
         self._connections.remove(server_conn)

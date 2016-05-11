@@ -262,8 +262,8 @@ class TCPSerwver(object):
                 else:
                     raise
         # IOStream 和 SSLIOStream是比较大的类，在iostream.py文件中定义,
-        # 包装每个socket连接(这可能不是很准确，因为IO事件不一定是socket，当时
-        # 就暂时把整个框架当成网络IO来理解框架代码)
+        # 包装每个socket连接(这可能不是很准确，因为IO事件不一定是socket,
+        # 暂时把整个框架当成网络IO来理解框架代码)
         try:
             if self.ssl_options is not None:
                 stream = SSLIOStream(connection, io_loop=self.io_loop,

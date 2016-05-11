@@ -582,6 +582,7 @@ class IOLoop(Configurable):
         with stack_context.NullContext():
             self.add_callback(callback, *args, **kwargs)
 
+    # future done之后回调callback，其中callback是在ioloop中调用
     def add_future(self, future, callback):
         """Schedules a callback on the ``IOLoop`` when the given
         `.Future` is finished.

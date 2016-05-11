@@ -703,7 +703,7 @@ class HTTP1ServerConnection(object):
             while True:
                 conn = HTTP1Connection(self.stream, False,
                                        self.params, self.context)
-                request_delegate = delegate.start_request(self, conn)
+                request_delegate = delegate.start_request(self, conn) # HttpServer返回 _ServerRequestAdapter->HTTPMessageDelegate
                 try:
                     ret = yield conn.read_response(request_delegate)
                 except (iostream.StreamClosedError,
