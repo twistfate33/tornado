@@ -149,6 +149,7 @@ def fork_processes(num_processes, max_restarts=100):
         if id is not None:
             return id
     num_restarts = 0
+    # master等待所有child子进程结束
     while children:
         try:
             pid, status = os.wait()

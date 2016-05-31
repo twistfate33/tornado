@@ -227,7 +227,8 @@ class WSGIAdapter(object):
             raise Exception("request did not finish synchronously")
         return connection._write_buffer
 
-
+# 在tornado中使用WSGI不能够发挥tornado的优势，tornado的并发模型基于单线程
+# 异步调用，这与多线程的WSGI服务器如gunicorn和uwsgi不一样
 class WSGIContainer(object):
     r"""Makes a WSGI-compatible function runnable on Tornado's HTTP server.
 

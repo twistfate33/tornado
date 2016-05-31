@@ -1842,13 +1842,14 @@ class Application(httputil.HTTPServerConnectionDelegate):
         # precedence than the more-precise handlers added later.
         # If a wildcard handler group exists, it should always be last
         # in the list, so insert new groups just before it.
+        # 手动添加的优先级比初始化时候的handlers优先级高,越早添加的优先级越高
         if self.handlers and self.handlers[-1][0].pattern == '.*$':
-            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
+            self.handlers.insert(-1, (re.compile(host_pattern), handlers)) # 保证构造函数初始化时候的handlers在最后
         else:
             self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
-            if isinstance(spec, (tuple, list)):
+            if isinstance(spec, (tuple, list)): # 元祖或者列表
                 assert len(spec) in (2, 3, 4)
                 spec = URLSpec(*spec)
             handlers.append(spec)
@@ -1857,7 +1858,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
                     app_log.warning(
                         "Multiple handlers named %s; replacing previous value",
                         spec.name)
-                self.named_handlers[spec.name] = spec
+                self.named_handlers[spec.name] = spec # 名字重复，后添加的handler会覆盖之前的handler
 
     def add_transform(self, transform_class):
         self.transforms.append(transform_class)
