@@ -35,8 +35,9 @@ function newMessage(form) {
     var disabled = form.find("input[type=submit]");
     disabled.disable();
     $.postJSON("/a/message/new", message, function(response) {
-        updater.showMessage(response);
-        if (message.id) {
+        updater.showMessage(response);  // post一个消息成功，服务器将该消息格式化后返回，该句可以注释，因为轮询的时候会收到
+                                        // 该消息进行显示
+        if (message.id) {               // 看不懂什么意思?
             form.parent().remove();
         } else {
             form.find("input[type=text]").val("").select();
@@ -117,7 +118,7 @@ var updater = {
         if (!response.messages) return;
         updater.cursor = response.cursor;
         var messages = response.messages;
-        updater.cursor = messages[messages.length - 1].id;
+        updater.cursor = messages[messages.length - 1].id; // 记录最后一个消息id，用于轮询
         console.log(messages.length, "new messages, cursor:", updater.cursor);
         for (var i = 0; i < messages.length; i++) {
             updater.showMessage(messages[i]);
@@ -126,7 +127,8 @@ var updater = {
 
     showMessage: function(message) {
         var existing = $("#m" + message.id);
-        if (existing.length > 0) return;
+        if (existing.length > 0) return;    // 如果不做此判断，那么浏览器在发送消息得到响应后显示一次消息，服务器广播该消息
+                                            // 再次接收到，就会导致重复显示该条消息
         var node = $(message.html);
         node.hide();
         $("#inbox").append(node);
