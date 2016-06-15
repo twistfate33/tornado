@@ -143,8 +143,8 @@ the `.IOLoop` will log a stack trace::
     # we pass the function object to be called by the IOLoop.
     IOLoop.current().spawn_callback(divide, 1, 0)
 
-Finally, at the top level of a program, *if the* `.IOLoop` *is not yet
-running,* you can start the `.IOLoop`, run the coroutine, and then
+Finally, at the top level of a program, **if the IOLoop is not yet
+running**, you can start the `.IOLoop`, run the coroutine, and then
 stop the `.IOLoop` with the `.IOLoop.run_sync` method. This is often
 used to start the ``main`` function of a batch-oriented program::
 
